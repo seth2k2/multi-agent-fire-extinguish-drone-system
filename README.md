@@ -109,5 +109,3 @@ with it as described in Controls.
   and `python-dotenv` lets you run the simulation without LLM control (you can still interact
   manually via the GUI). To use CrewAI features, install the rest and ensure your LLM access is
   configured.
-
-# multi-agent-fire-extinguish-drone-system
