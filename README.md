@@ -40,7 +40,7 @@ Core behaviors implemented in `main.py` (high level):
   - "everyone dock"
   - "dock drone1"
   - "move drone1 to 650,800"
-  - move drone1 to 650,800, drone 2 to 500,500" #noe that 500,500 are x,y coordinated in the playgorund which is a 1000 into 1000 square
+  - move drone1 to 650,800, drone 2 to 500,500" `note that 500,500 are x,y coordinates in the playgorund which is a 1000 into 1000 square`
   - "make a circle"
 
 If the interpreter can map your instruction it will print the parsed JSON command in the terminal
