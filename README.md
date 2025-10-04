@@ -40,6 +40,7 @@ Core behaviors implemented in `main.py` (high level):
   - "everyone dock"
   - "dock drone1"
   - "move drone1 to 650,800"
+  - move drone1 to 650,800, drone 2 to 500,500" #noe that 500,500 are x,y coordinated in the playgorund which is a 1000 into 1000 square
   - "make a circle"
 
 If the interpreter can map your instruction it will print the parsed JSON command in the terminal
@@ -109,16 +110,4 @@ with it as described in Controls.
   manually via the GUI). To use CrewAI features, install the rest and ensure your LLM access is
   configured.
 
-## Extending / development ideas
-- Add a GUI-based operator console to send instructions (instead of terminal chat).
-- Add better drone path planning around fire/ash obstacles.
-- Improve LLM prompt and task boundaries for more robust instruction parsing.
-
-## License
-This repository does not include an explicit license file. Add one if you intend to share or
-release the code publicly.
-
----
-If you'd like, I can also add a small example `.env.example`, or produce a minimal `requirements-min.txt`
-containing only the packages needed to run the graphical simulation without LLM features.
 # multi-agent-fire-extinguish-drone-system
