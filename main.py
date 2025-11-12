@@ -15,16 +15,68 @@ SCREEN_WIDTH = PLAYGROUND_SIZE + SIDEBAR_WIDTH
 
 # Shared state
 shared_state = {
-    "fires": [],      # active fires [(x,y,radius,spread_rate,age_seconds)]
-    "burned": [],     # ash patches [(x,y,radius)]
-    "drones": {},     # populated at startup based on user input
-    "birds": [],      # [(x,y,vx,vy)]
+    "fires": [],    
+    "burned": [],    
+    "drones": {},   
+    "birds": [],    
     "user_instruction": None,
     "mode": "auto",
     "debug_overlay": False,
     "matrix": [],
     "game_over": False
 }
+
+# Irregular fire shape helper
+def get_perturbed_radius(base_radius, angle, seed, perturbation_factor=0.25):
+    """
+    Returns a perturbed radius for a given angle to create irregular fire shapes.
+    Uses a seed for consistent perturbation pattern per fire.
+    Optimized with reduced perturbation for better performance.
+    """
+    # Simplified noise calculation for performance
+    angle_int = int(angle * 100) % 360
+    random.seed(int(seed * 1000 + angle_int))
+    noise = random.uniform(-perturbation_factor, perturbation_factor)
+    return base_radius * (1.0 + noise)
+
+def point_in_irregular_shape(px, py, cx, cy, base_radius, seed):
+    """
+    Check if point (px, py) is inside an irregular shape centered at (cx, cy).
+    Optimized approximation for performance.
+    """
+    dx = px - cx
+    dy = py - cy
+    dist = math.hypot(dx, dy)
+    
+    # Quick rejection test - if clearly outside max possible radius, skip detailed check
+    max_radius = base_radius * 1.3
+    if dist > max_radius:
+        return False
+    
+    # Quick acceptance test - if clearly inside min possible radius, accept
+    min_radius = base_radius * 0.7
+    if dist < min_radius:
+        return True
+    
+    # Only do detailed check for points near the boundary
+    angle = math.atan2(dy, dx)
+    perturbed_r = get_perturbed_radius(base_radius, angle, seed)
+    return dist < perturbed_r
+
+def get_irregular_polygon(cx, cy, base_radius, seed, num_points=24):
+    """
+    Generate polygon points for an irregular shape.
+    Returns list of (x, y) tuples.
+    Reduced to 24 points for better performance.
+    """
+    points = []
+    for i in range(num_points):
+        angle = 2 * math.pi * i / num_points
+        r = get_perturbed_radius(base_radius, angle, seed)
+        x = cx + r * math.cos(angle)
+        y = cy + r * math.sin(angle)
+        points.append((int(x), int(y)))
+    return points
 
 # Initialize drones based on user input
 def initialize_drones(count: int = 0):
@@ -57,18 +109,38 @@ def update_matrix():
     N = PLAYGROUND_SIZE // GRID_SIZE
     grid = [["grass" for _ in range(N)] for _ in range(N)]
     
-    for (x,y,r,_,_) in shared_state["fires"]:
-        for i in range(N):
-            for j in range(N):
+    # Optimized: Only check cells within bounding box of each fire
+    for fire in shared_state["fires"]:
+        x, y, r = fire[0], fire[1], fire[2]
+        seed = fire[5] if len(fire) > 5 else 0
+        # Bounding box optimization
+        max_r = r * 1.3
+        min_i = max(0, int((x - max_r) // GRID_SIZE))
+        max_i = min(N, int((x + max_r) // GRID_SIZE) + 1)
+        min_j = max(0, int((y - max_r) // GRID_SIZE))
+        max_j = min(N, int((y + max_r) // GRID_SIZE) + 1)
+        
+        for i in range(min_i, max_i):
+            for j in range(min_j, max_j):
                 cell_x, cell_y = i*GRID_SIZE, j*GRID_SIZE
-                if (cell_x-x)**2 + (cell_y-y)**2 < r**2:
+                if point_in_irregular_shape(cell_x, cell_y, x, y, r, seed):
                     grid[j][i] = "fire"
     
-    for (x,y,r) in shared_state["burned"]:
-        for i in range(N):
-            for j in range(N):
+    # Optimized: Only check cells within bounding box of each burned area
+    for burned in shared_state["burned"]:
+        x, y, r = burned[0], burned[1], burned[2]
+        seed = burned[3] if len(burned) > 3 else 0
+        # Bounding box optimization
+        max_r = r * 1.3
+        min_i = max(0, int((x - max_r) // GRID_SIZE))
+        max_i = min(N, int((x + max_r) // GRID_SIZE) + 1)
+        min_j = max(0, int((y - max_r) // GRID_SIZE))
+        max_j = min(N, int((y + max_r) // GRID_SIZE) + 1)
+        
+        for i in range(min_i, max_i):
+            for j in range(min_j, max_j):
                 cell_x, cell_y = i*GRID_SIZE, j*GRID_SIZE
-                if (cell_x-x)**2 + (cell_y-y)**2 < r**2:
+                if point_in_irregular_shape(cell_x, cell_y, x, y, r, seed):
                     grid[j][i] = "ash"
     
     for name, d in shared_state["drones"].items():
@@ -98,7 +170,9 @@ def spread_fires():
     # Continuous spread; also convert inner area to ash after 4s exposure
     dt = 1/60
     new_fires = []
-    for (x,y,r,rate,age) in shared_state["fires"]:
+    for fire in shared_state["fires"]:
+        x, y, r, rate, age = fire[0], fire[1], fire[2], fire[3], fire[4]
+        seed = fire[5] if len(fire) > 5 else random.random()
         r += rate
         age += dt
         # ash radius: inner disk that's been burning > 3s becomes ash
@@ -107,14 +181,17 @@ def spread_fires():
         if ash_r > 0:
             # update or append burned record for this center
             found = False
-            for i,(bx,by,br) in enumerate(shared_state["burned"]):
+            for i, burned in enumerate(shared_state["burned"]):
+                bx, by = burned[0], burned[1]
                 if bx == x and by == y:
-                    shared_state["burned"][i] = (bx, by, max(br, ash_r))
+                    br = burned[2]
+                    bseed = burned[3] if len(burned) > 3 else seed
+                    shared_state["burned"][i] = (bx, by, max(br, ash_r), bseed)
                     found = True
                     break
             if not found:
-                shared_state["burned"].append((x, y, ash_r))
-        new_fires.append((x, y, r, rate, age))
+                shared_state["burned"].append((x, y, ash_r, seed))
+        new_fires.append((x, y, r, rate, age, seed))
     shared_state["fires"] = new_fires
 
 # Forest destroyed check
@@ -122,14 +199,20 @@ def forest_destroyed():
     if not shared_state["burned"]:
         return False
     N = PLAYGROUND_SIZE // GRID_SIZE
-    for i in range(N):
-        for j in range(N):
+    # Sample check - only check every 3rd cell for performance
+    step = 3
+    for i in range(0, N, step):
+        for j in range(0, N, step):
             cell_x, cell_y = i*GRID_SIZE, j*GRID_SIZE
             covered = False
-            for (bx,by,br) in shared_state["burned"]:
-                if (cell_x - bx)**2 + (cell_y - by)**2 < br**2:
-                    covered = True
-                    break
+            for burned in shared_state["burned"]:
+                bx, by, br = burned[0], burned[1], burned[2]
+                bseed = burned[3] if len(burned) > 3 else 0
+                # Quick distance check first
+                if abs(cell_x - bx) < br * 1.3 and abs(cell_y - by) < br * 1.3:
+                    if point_in_irregular_shape(cell_x, cell_y, bx, by, br, bseed):
+                        covered = True
+                        break
             if not covered:
                 return False
     return True
@@ -137,21 +220,26 @@ def forest_destroyed():
 # Fire extinguishing
 def extinguish_fires():
     to_remove = []
-    for idx,(x,y,r,rate,age) in enumerate(shared_state["fires"]):
+    for idx, fire in enumerate(shared_state["fires"]):
+        x, y, r, rate, age = fire[0], fire[1], fire[2], fire[3], fire[4]
+        seed = fire[5] if len(fire) > 5 else 0
         for d in shared_state["drones"].values():
-            dx,dy = d["pos"]
-            if math.hypot(dx-x,dy-y) < r+15:
+            dx, dy = d["pos"]
+            if point_in_irregular_shape(dx, dy, x, y, r + 15, seed):
                 r -= 0.5
         if r <= 5:
             # ensure a burned record exists and is at least radius 20
             ensured = False
-            for i,(bx,by,br) in enumerate(shared_state["burned"]):
+            for i, burned in enumerate(shared_state["burned"]):
+                bx, by = burned[0], burned[1]
                 if bx == x and by == y:
-                    shared_state["burned"][i] = (bx, by, max(br, 20))
+                    br = burned[2]
+                    bseed = burned[3] if len(burned) > 3 else seed
+                    shared_state["burned"][i] = (bx, by, max(br, 20), bseed)
                     ensured = True
                     break
             if not ensured:
-                shared_state["burned"].append((x,y,20))  # ash remains when extinguished
+                shared_state["burned"].append((x, y, 20, seed))
             to_remove.append(idx)
             # release drones assigned to this fire (by center)
             for drone in shared_state["drones"].values():
@@ -159,7 +247,7 @@ def extinguish_fires():
                     drone["assigned_fire"] = None
                     drone["target"] = None
         else:
-            shared_state["fires"][idx] = (x,y,max(r,1),rate,age)
+            shared_state["fires"][idx] = (x, y, max(r, 1), rate, age, seed)
     for i in reversed(to_remove):
         shared_state["fires"].pop(i)
 
@@ -171,15 +259,18 @@ def assign_fires():
     drone_names = list(shared_state["drones"].keys())
     total_drones = max(1, len(drone_names))
     if not fires:
-        # No fires: dock drones automatically
+        # No fires: dock drones automatically, but respect override flags
         for name in drone_names:
-            shared_state["drones"][name]["assigned_fire"] = None
-            shared_state["drones"][name]["target"] = docks[name]
+            # Only dock drones that are not currently overridden by user commands
+            if not shared_state["drones"][name].get("override"):
+                shared_state["drones"][name]["assigned_fire"] = None
+                shared_state["drones"][name]["target"] = docks[name]
         return
 
     # Compute a weight for each fire: prefer larger radius and higher spread rate
     fire_weights = []
-    for (x,y,r,rate,age) in fires:
+    for fire in fires:
+        x, y, r, rate, age = fire[0], fire[1], fire[2], fire[3], fire[4]
         w = max(1.0, (r*r) * (1.0 + rate*5.0))
         fire_weights.append(w)
 
@@ -233,7 +324,7 @@ def assign_fires():
 
     # For each fire, assign only the number of additional drones needed (do not pull currently assigned drones)
     for i, f in enumerate(fires):
-        fx, fy, fr, rate, age = f
+        fx, fy, fr, rate, age = f[0], f[1], f[2], f[3], f[4]
         center = (fx, fy)
         desired = alloc[i]
         currently = len(assigned_lists.get(center, []))
@@ -257,7 +348,8 @@ def assign_fires():
     # Any remaining unassigned drones assist the largest fire (or dock if none)
     if unassigned:
         largest_idx = max(range(len(fires)), key=lambda i: fires[i][2] if fires else 0)
-        fx, fy, fr, rate, age = fires[largest_idx]
+        fire = fires[largest_idx]
+        fx, fy, fr, rate, age = fire[0], fire[1], fire[2], fire[3], fire[4]
         center = (fx, fy)
         # Send remaining unassigned drones to the fire center with jitter
         for j, name in enumerate(list(unassigned)):
@@ -700,8 +792,19 @@ while running:
                     pass
             else:
                 # click was on the playground (left area): Prevent new fires from starting on ash
-                if mx < PLAYGROUND_SIZE and not any(math.hypot(mx - fx, my - fy) < fr for (fx, fy, fr) in shared_state["burned"]):
-                    shared_state["fires"].append((mx, my, 10, 0.2, 0.0))
+                if mx < PLAYGROUND_SIZE:
+                    # Check if clicking on existing ash
+                    on_ash = False
+                    for burned in shared_state["burned"]:
+                        fx, fy, fr = burned[0], burned[1], burned[2]
+                        fseed = burned[3] if len(burned) > 3 else 0
+                        if point_in_irregular_shape(mx, my, fx, fy, fr, fseed):
+                            on_ash = True
+                            break
+                    if not on_ash:
+                        # Create new fire with random seed
+                        fire_seed = random.random()
+                        shared_state["fires"].append((mx, my, 10, 0.2, 0.0, fire_seed))
             # chat input box focus (centered in sidebar)
             chat_height = 28
             chat_x = PLAYGROUND_SIZE + 12
@@ -750,39 +853,37 @@ while running:
             shared_state["mode"] = "override"  # freeze behavior
     
     if not shared_state["game_over"]:
-        if shared_state["mode"] == "auto":
-            assign_fires()
-        else:
-            instr = shared_state["user_instruction"]
-            if instr:
-                action = instr.get("action")
-                targets = instr.get("targets")
-                # normalize targets: if missing or ["all"], use all drones
-                if isinstance(targets, str):
-                    targets = [targets]
-                if not targets or (isinstance(targets, list) and any(t == "all" for t in targets)):
-                    targets = list(shared_state["drones"].keys())
-                # ensure targets are iterable of valid drone names
-                targets = [t for t in targets if t in shared_state["drones"]]
+        # Process user instructions first, regardless of mode
+        instr = shared_state["user_instruction"]
+        if instr:
+            action = instr.get("action")
+            targets = instr.get("targets")
+            # normalize targets: if missing or ["all"], use all drones
+            if isinstance(targets, str):
+                targets = [targets]
+            if not targets or (isinstance(targets, list) and any(t == "all" for t in targets)):
+                targets = list(shared_state["drones"].keys())
+            # ensure targets are iterable of valid drone names
+            targets = [t for t in targets if t in shared_state["drones"]]
 
-                docks = {name: (40, 40) for name in shared_state["drones"].keys()}
+            docks = {name: (40, 40) for name in shared_state["drones"].keys()}
 
-                # accept alias with space/underscore for check fire
-                if action in ("check fire", "check_fire"):
-                    action = "check_fire"
-                if action == "dock":
-                    # If targets provided explicitly, override only those drones.
-                    # If targets is all (or missing), override all drones.
-                    explicit_all = (instr.get("targets") is None) or (isinstance(instr.get("targets"), list) and any(t == "all" for t in instr.get("targets") or []))
-                    for t in targets:
-                        shared_state["drones"][t]["target"] = docks[t]
-                        # set per-drone override
-                        shared_state["drones"][t]["override"] = True
-                    if explicit_all:
-                        # ensure all drones are marked override
-                        for dn in shared_state["drones"].keys():
-                            shared_state["drones"][dn]["override"] = True
-                elif action == "move":
+            # accept alias with space/underscore for check fire
+            if action in ("check fire", "check_fire"):
+                action = "check_fire"
+            if action == "dock":
+                # If targets provided explicitly, override only those drones.
+                # If targets is all (or missing), override all drones.
+                explicit_all = (instr.get("targets") is None) or (isinstance(instr.get("targets"), list) and any(t == "all" for t in instr.get("targets") or []))
+                for t in targets:
+                    shared_state["drones"][t]["target"] = docks[t]
+                    # set per-drone override
+                    shared_state["drones"][t]["override"] = True
+                if explicit_all:
+                    # ensure all drones are marked override
+                    for dn in shared_state["drones"].keys():
+                        shared_state["drones"][dn]["override"] = True
+            elif action == "move":
                     loc = instr.get("location")
                     # Support a list of 'x,y' strings for per-agent targets
                     per_targets = []
@@ -841,52 +942,54 @@ while running:
                     if explicit_all:
                         for dn in shared_state["drones"].keys():
                             shared_state["drones"][dn]["override"] = True
-                elif action == "move_to_fire":
-                    fire = instr.get("fire")
-                    if isinstance(fire, (list, tuple)) and len(fire) >= 2:
-                        x, y = float(fire[0]), float(fire[1])
-                        for t in targets:
-                            shared_state["drones"][t]["target"] = (x, y)
-                        # mark targeted drones override
-                        for t in targets:
-                            shared_state["drones"][t]["override"] = True
-                elif action == "check_fire":
-                    # Patrol four corners cyclically for any number of drones
-                    m = 50
-                    maxc = PLAYGROUND_SIZE - m
-                    patrol_points = [(m, m), (maxc, m), (maxc, maxc), (m, maxc)]
-                    pts_len = len(patrol_points)
-                    for i, (name,d) in enumerate(shared_state["drones"].items()):
-                        d["target"] = patrol_points[i % pts_len]
-                    # mark all drones override for this command
+            elif action == "move_to_fire":
+                fire = instr.get("fire")
+                if isinstance(fire, (list, tuple)) and len(fire) >= 2:
+                    x, y = float(fire[0]), float(fire[1])
+                    for t in targets:
+                        shared_state["drones"][t]["target"] = (x, y)
+                    # mark targeted drones override
+                    for t in targets:
+                        shared_state["drones"][t]["override"] = True
+            elif action == "check_fire":
+                # Patrol four corners cyclically for any number of drones
+                m = 50
+                maxc = PLAYGROUND_SIZE - m
+                patrol_points = [(m, m), (maxc, m), (maxc, maxc), (m, maxc)]
+                pts_len = len(patrol_points)
+                for i, (name,d) in enumerate(shared_state["drones"].items()):
+                    d["target"] = patrol_points[i % pts_len]
+                # mark all drones override for this command
+                for dn in shared_state["drones"].keys():
+                    shared_state["drones"][dn]["override"] = True
+            elif action == "resume":
+                # Determine if this resume targets all drones
+                explicit_all = (instr.get("targets") is None) or (isinstance(instr.get("targets"), list) and any(t == "all" for t in instr.get("targets") or []))
+                # If specific targets provided, clear override only for those drones
+                if instr.get("targets") and not explicit_all:
+                    for t in targets:
+                        if t in shared_state["drones"]:
+                            # clear override, target and assigned_fire so the allocator can reassign them
+                            shared_state["drones"][t]["override"] = False
+                            shared_state["drones"][t]["target"] = None
+                            shared_state["drones"][t]["assigned_fire"] = None
+                    # clear stored user instruction so it is not reapplied repeatedly
+                    shared_state["user_instruction"] = None
+                else:
+                    # resume for all drones
                     for dn in shared_state["drones"].keys():
-                        shared_state["drones"][dn]["override"] = True
-                elif action == "resume":
-                    # Determine if this resume targets all drones
-                    explicit_all = (instr.get("targets") is None) or (isinstance(instr.get("targets"), list) and any(t == "all" for t in instr.get("targets") or []))
-                    # If specific targets provided, clear override only for those drones
-                    if instr.get("targets") and not explicit_all:
-                        for t in targets:
-                            if t in shared_state["drones"]:
-                                # clear override, target and assigned_fire so the allocator can reassign them
-                                shared_state["drones"][t]["override"] = False
-                                shared_state["drones"][t]["target"] = None
-                                shared_state["drones"][t]["assigned_fire"] = None
-                        # log resumed drones and clear stored user instruction so it is not reapplied repeatedly
-                        print(f"Resumed drones: {targets}")
-                        # clear stored user instruction so it is not reapplied repeatedly
-                        shared_state["user_instruction"] = None
-                    else:
-                        # resume for all drones
-                        for dn in shared_state["drones"].keys():
-                            shared_state["drones"][dn]["override"] = False
-                            shared_state["drones"][dn]["target"] = None
-                            shared_state["drones"][dn]["assigned_fire"] = None
-                        print("Resumed all drones")
-                        # only switch global mode back to auto when resuming all
-                        shared_state["mode"] = "auto"
-                    # ensure resumed drones are considered by the allocator immediately
-                    shared_state["recompute_assignments"] = True
+                        shared_state["drones"][dn]["override"] = False
+                        shared_state["drones"][dn]["target"] = None
+                        shared_state["drones"][dn]["assigned_fire"] = None
+                    # only switch global mode back to auto when resuming all
+                    shared_state["mode"] = "auto"
+                # ensure resumed drones are considered by the allocator immediately
+                shared_state["recompute_assignments"] = True
+        
+        # After processing instructions, call assign_fires for non-overridden drones
+        # This runs in auto mode OR when we have fires to assign
+        if shared_state["mode"] == "auto" or shared_state.get("fires"):
+            assign_fires()
     # If a background worker requested recompute, do it on the main thread to avoid races
     if shared_state.get("recompute_assignments"):
         try:
@@ -909,17 +1012,25 @@ while running:
     
     # Render
     screen.blit(background, (0,0))
-    # Fire overlay rendering first (semi-transparent red)
+    # Fire overlay rendering first (semi-transparent red) - irregular shapes
     fire_layer = pygame.Surface((PLAYGROUND_SIZE, PLAYGROUND_SIZE), pygame.SRCALPHA)
-    for (x,y,r,_,_) in shared_state["fires"]:
-        pygame.draw.circle(fire_layer, (255, 0, 0, 130), (int(x), int(y)), int(r))
+    for fire in shared_state["fires"]:
+        x, y, r = fire[0], fire[1], fire[2]
+        seed = fire[5] if len(fire) > 5 else 0
+        points = get_irregular_polygon(x, y, r, seed)
+        if len(points) >= 3:
+            pygame.draw.polygon(fire_layer, (255, 0, 0, 130), points)
     screen.blit(fire_layer, (0,0))
     # Draw docking station (80x80 black square) at (0,0)
     pygame.draw.rect(screen, (0,0,0), pygame.Rect(0, 0, 80, 80))
-    # Ash overlay rendering on top so inner area shows ash
+    # Ash overlay rendering on top so inner area shows ash - irregular shapes
     ash_layer = pygame.Surface((PLAYGROUND_SIZE, PLAYGROUND_SIZE), pygame.SRCALPHA)
-    for (x,y,r) in shared_state["burned"]:
-        pygame.draw.circle(ash_layer, (30,30,30,200), (int(x),int(y)), int(r))
+    for burned in shared_state["burned"]:
+        x, y, r = burned[0], burned[1], burned[2]
+        seed = burned[3] if len(burned) > 3 else 0
+        points = get_irregular_polygon(x, y, r, seed)
+        if len(points) >= 3:
+            pygame.draw.polygon(ash_layer, (30,30,30,200), points)
     screen.blit(ash_layer, (0,0))
     # Drones
     for d in shared_state["drones"].values():
@@ -1024,9 +1135,36 @@ while running:
     # Show last user input (only the last message) below the send button
     last_msg = shared_state.get("last_user_input")
     if last_msg:
-        lm_font = pygame.font.SysFont(None, 18)
-        lm_surf = lm_font.render(f"Last: {last_msg[:40]}", True, (180,180,180))
-        screen.blit(lm_surf, (chat_x, send_rect.y + send_rect.h + 8))
+        lm_font = pygame.font.SysFont(None, 22)  # Increased font size from 18 to 22
+        # Display full command with word wrapping
+        max_width = SIDEBAR_WIDTH - 24
+        words = last_msg.split()
+        lines = []
+        current_line = ""
+        
+        for word in words:
+            test_line = current_line + (" " if current_line else "") + word
+            test_surf = lm_font.render(test_line, True, (180,180,180))
+            if test_surf.get_width() <= max_width:
+                current_line = test_line
+            else:
+                if current_line:
+                    lines.append(current_line)
+                current_line = word
+        if current_line:
+            lines.append(current_line)
+        
+        # Render all lines
+        y_offset = send_rect.y + send_rect.h + 8
+        # Title for last command
+        title_surf = lm_font.render("Last command:", True, (220,220,220))
+        screen.blit(title_surf, (chat_x, y_offset))
+        y_offset += 24
+        
+        for line in lines:
+            lm_surf = lm_font.render(line, True, (180,180,180))
+            screen.blit(lm_surf, (chat_x, y_offset))
+            y_offset += 22
 
     # HUD: show mode and last accepted command
     hud_font = pygame.font.SysFont(None, 40)
