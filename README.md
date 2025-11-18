@@ -1,3 +1,53 @@
+# Multi-Agent Fire Extinguish Drone System
+
+A compact multi-agent Pygame simulation where autonomous drones extinguish procedurally spreading fires. The project includes an in-game CrewAI-powered chat interpreter for high-level operator commands, a right-side control sidebar, and visual debugging overlays.
+
+Entry point: `main.py`
+
+## Quick start (Windows PowerShell)
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+# optionally set an API key for LLM features
+# $env:OPENAI_API_KEY = "your_api_key_here"
+python main.py
+```
+
+## What this does
+- Simulates fires that grow and spread across a forested playground.
+- Autonomous drones move to fire centers and extinguish fires (assignment is proportional to fire severity).
+- An integrated CrewAI interpreter maps natural-language chat to structured drone commands (dock, move, resume, etc.).
+- A right-side sidebar provides controls: Spawn Birds, Add/Remove Drone, Restart, and an in-GUI chat box.
+
+## Key features (short)
+- Proportional multi-fire allocation and sticky assignments (drones keep assigned fires until extinguished).
+- Docking protection: drones docking are not reassigned mid-dock.
+- Irregular, seeded fire shapes for more realistic visuals.
+- Debug overlay (press `D`) — shows per-drone target lines and states.
+- Clean terminal: routine runtime logs are suppressed; use the debug overlay for runtime inspection.
+
+## Resources / UI screenshots
+
+Place your UI screenshots in a `resources/` folder at the project root and name them as below. The README references these filenames for quick visual documentation.
+
+- `resources/ui1_agent_functionality.png` — Agent functionality (overview).
+- `resources/ui2_tracking_visualized.png` — Agent function with tracking visualized (press `D`).
+- `resources/ui3_bird_flock.png` — Bird flock appearing in the playground.
+- `resources/ui4_user_command_override_1.png` — Example: user command override (targeted).
+- `resources/ui5_user_command_override_2.png` — Example: user command override (global/all).
+- `resources/ui6_agent_fails_extinguish.png` — Example failure case: agent fails to extinguish a fire.
+
+If you already have images in the `images/` folder, move or copy them into `resources/` and rename them to match the filenames above.
+
+## Notes
+- Dependencies: see `requirements.txt`. Installing the full list enables CrewAI features; `pygame` alone runs the simulation without LLM.
+- If CrewAI integration is used, ensure your API key is available in the environment or `.env` file.
+- For troubleshooting, run the simulation and press `D` to enable the debug overlay which exposes per-drone state and target lines.
+
+If you want, I can move any existing screenshots from `images/` to `resources/` and rename them to match the UI list above.
 ## Multi-Agent Fire Extinguish Drone System
 
 This repository contains a multi-agent simulation built with Pygame and CrewAI. The simulation models
