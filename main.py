@@ -1156,7 +1156,7 @@ while running:
         
         # Render all lines
         y_offset = send_rect.y + send_rect.h + 8
-        # Title for last command
+        # Title for the last command
         title_surf = lm_font.render("Last command:", True, (220,220,220))
         screen.blit(title_surf, (chat_x, y_offset))
         y_offset += 24

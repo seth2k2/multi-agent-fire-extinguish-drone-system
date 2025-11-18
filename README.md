@@ -35,7 +35,7 @@ Important behavior details
 - Chat UI: the Send button in the sidebar is disabled while the input is empty to prevent accidental empty messages. The sidebar shows the last user message.
 
 Controls
-- On startup the simulation creates 4 drones by default. Use the sidebar buttons to add/remove drones at runtime.
+- On startup, the simulation creates 4 drones by default. Use the sidebar buttons to add/remove drones at runtime.
 - In the Pygame window:
   - Left-click the playground (left area) to start a fire (clicks on ash are ignored).
   - Use the sidebar buttons:
