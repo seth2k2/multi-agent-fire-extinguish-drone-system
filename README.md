@@ -31,12 +31,7 @@ python main.py
 
 ## Resources / UI screenshots
 
-- `resources/ui1.png` — Agent functionality (overview).
-- `resources/ui2.png` — Agent function with tracking visualized (press `D`).
-- `resources/ui3` — Bird flock appearing in the playground.
-- `resources/ui4` — Example: user command override (targeted).
-- `resources/ui5.png` — Example: user command override (global/all).
-- `resources/ui6.png` — Example failure case: agent fails to extinguish a fire.
+<div style="display: flex; flex-wrap: wrap; gap: 10px;"> <div style="flex: 1; min-width: 45%;"> <img src="resources/ui1.png" alt="Agent functionality overview" width="100%"> <p align="center"><em>Agent functionality (overview)</em></p> </div> <div style="flex: 1; min-width: 45%;"> <img src="resources/ui2.png" alt="Agent tracking visualized" width="100%"> <p align="center"><em>Agent function with tracking visualized (press D)</em></p> </div> <div style="flex: 1; min-width: 45%;"> <img src="resources/ui3.png" alt="Bird flock in the playground" width="100%"> <p align="center"><em>Bird flock appearing in the playground</em></p> </div> <div style="flex: 1; min-width: 45%;"> <img src="resources/ui4.png" alt="User command override targeted" width="100%"> <p align="center"><em>User command override (targeted)</em></p> </div> <div style="flex: 1; min-width: 45%;"> <img src="resources/ui5.png" alt="User command override global" width="100%"> <p align="center"><em>User command override (global/all)</em></p> </div> <div style="flex: 1; min-width: 45%;"> <img src="resources/ui6.png" alt="Failure case example" width="100%"> <p align="center"><em>Failure case: agent fails to extinguish a fire</em></p> </div> </div>
 
 
 ## Notes
