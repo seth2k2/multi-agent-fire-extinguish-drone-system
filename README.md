@@ -31,16 +31,13 @@ python main.py
 
 ## Resources / UI screenshots
 
-Place your UI screenshots in a `resources/` folder at the project root and name them as below. The README references these filenames for quick visual documentation.
+- `resources/ui1.png` — Agent functionality (overview).
+- `resources/ui2.png` — Agent function with tracking visualized (press `D`).
+- `resources/ui3` — Bird flock appearing in the playground.
+- `resources/ui4` — Example: user command override (targeted).
+- `resources/ui5.png` — Example: user command override (global/all).
+- `resources/ui6.png` — Example failure case: agent fails to extinguish a fire.
 
-- `resources/ui1_agent_functionality.png` — Agent functionality (overview).
-- `resources/ui2_tracking_visualized.png` — Agent function with tracking visualized (press `D`).
-- `resources/ui3_bird_flock.png` — Bird flock appearing in the playground.
-- `resources/ui4_user_command_override_1.png` — Example: user command override (targeted).
-- `resources/ui5_user_command_override_2.png` — Example: user command override (global/all).
-- `resources/ui6_agent_fails_extinguish.png` — Example failure case: agent fails to extinguish a fire.
-
-If you already have images in the `images/` folder, move or copy them into `resources/` and rename them to match the filenames above.
 
 ## Notes
 - Dependencies: see `requirements.txt`. Installing the full list enables CrewAI features; `pygame` alone runs the simulation without LLM.
@@ -56,33 +53,11 @@ LLM-based interpreter (CrewAI) converts operator chat into structured drone comm
 
 Entry point: `main.py`.
 
-New / notable features (not in earlier READMEs)
-- Sidebar control panel (right side of the window) with buttons: Spawn Birds, Add Drone, Remove Drone, Restart.
-- In-GUI chat input in the sidebar with a "Send" button (disabled when the input is empty). The chat goes to the CrewAI interpreter — terminal input is no longer required.
-- Starts with 4 drones by default; the "Restart" button resets the simulation and returns the drone count to 4.
-- Per-drone override semantics: LLM commands may target specific drones (e.g. "dock drone3") or all drones. Targeted commands only affect listed drones; global commands affect everyone.
-- Proportional allocation across multiple fires: drones are split among fires in proportion to a fire's severity (radius and spread rate), with fractional rounding and nearest-drone selection.
-- Docking protection: drones en route to the dock are not pulled away mid-dock by new allocations (avoids interrupting docking operations).
-- Drones target fire centers (with a small jitter) so they actually enter and extinguish fires reliably.
-- Debug overlay: press D to toggle a debug view that draws per-drone target lines and shows per-drone state in the sidebar (useful for diagnosing assignment/resume issues).
-- Clean runtime: the program no longer prints routine logs to the terminal (keeps the terminal clean).
-
 Basic idea / how the system works
 - Fires: left-click on the playground area to start a new fire. Fires grow over time and create ash (burned area). If the whole forest becomes ash, the simulation displays "FOREST DESTROYED!" and freezes.
 - Drones: drones have position, a target, and an optional assigned fire center. In automatic mode (`auto`) drones are assigned to fires using the proportional allocation algorithm described above. Drones move to targets and reduce a fire's radius when inside the fire area.
 - Birds: spawn birds using the "Spawn Birds" button in the sidebar. Drones will steer away from nearby birds.
 - LLM / CrewAI interpreter: the in-GUI chat sends natural-language instructions to the CrewAI interpreter. The interpreter maps inputs to one of the supported actions (dock, move, check fire, resume, none) and the simulation applies the structured command.
-
-Supported LLM actions (examples)
-- dock (e.g. `dock drone3` or `everyone dock`) — send drone(s) back to the docking station.
-- move (e.g. `move drone1 to 650,800` or shape commands like `make a circle`) — move specified drones to coordinates or computed formation points.
-- check fire — instruct drones to patrol corners and inspect the playground.
-- resume — resume normal operation (targeted resume clears override only for listed drones; `resume` with no targets resumes all).
-
-Important behavior details
-- Targeted vs global commands: When the LLM command includes specific drone names, only those drones are overridden (their `override` flag is set). Commands that apply to "all" switch the global mode to `override` and set overrides on all drones.
-- Resume handling: resuming a drone clears its `override`, `target`, and `assigned_fire` so it becomes eligible for immediate reassignment by the main allocator. The main thread performs assignments (no cross-thread assignment calls) to avoid races.
-- Chat UI: the Send button in the sidebar is disabled while the input is empty to prevent accidental empty messages. The sidebar shows the last user message.
 
 Controls
 - On startup, the simulation creates 4 drones by default. Use the sidebar buttons to add/remove drones at runtime.
@@ -144,9 +119,3 @@ $env:OPENAI_API_KEY = "your_api_key_here"
 ```powershell
 python main.py
 ```
-
-Notes & troubleshooting
-- The runtime intentionally suppresses routine console logs to keep the terminal clean. If you need debugging output, enable the debug overlay (`D`) or temporarily re-enable prints in `main.py`.
-- If CrewAI/LLM features fail, verify your API key and network access. The interpreter uses `gpt-4o` by default; change the model in `main.py` if needed.
-- If images are missing, ensure the `images/` folder contains `forest.png` and `drone.png`; `bird.png` is optional (the code draws circles for birds when the image is missing).
-- If Pygame cannot open a display (headless systems), run locally with a GUI-enabled session.
